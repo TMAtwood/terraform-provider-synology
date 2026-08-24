@@ -20,7 +20,7 @@ require (
 	github.com/mattn/go-shellwords v1.0.14
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/subpop/go-ini v0.1.5
-	github.com/synology-community/go-synology v0.1.12-fcg.7
+	github.com/synology-community/go-synology v0.1.12-fcg.8
 	github.com/testcontainers/testcontainers-go v0.43.0
 	github.com/testcontainers/testcontainers-go/modules/compose v0.43.0
 	github.com/tredoe/osutil v1.5.0
@@ -231,4 +231,4 @@ require (
 
 tool github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs
 
-replace github.com/synology-community/go-synology => github.com/TMAtwood/go-synology v0.1.12-fcg.7
+replace github.com/synology-community/go-synology => github.com/TMAtwood/go-synology v0.1.12-fcg.8
