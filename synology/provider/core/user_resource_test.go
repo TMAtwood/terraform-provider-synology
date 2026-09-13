@@ -42,7 +42,11 @@ resource "synology_core_user" "test" {
 }
 `, name),
 				Check: r.ComposeTestCheckFunc(
-					r.TestCheckResourceAttr("synology_core_user.test", "description", "tfacc user updated"),
+					r.TestCheckResourceAttr(
+						"synology_core_user.test",
+						"description",
+						"tfacc user updated",
+					),
 				),
 			},
 			{
@@ -75,13 +79,21 @@ resource "synology_core_user" "test" {
 }
 `, name),
 				Check: r.ComposeTestCheckFunc(
-					r.TestCheckResourceAttrWith("synology_core_user.test", "name", func(v string) error {
-						if v != name {
-							return fmt.Errorf("name")
-						}
-						return nil
-					}),
-					r.TestMatchResourceAttr("synology_core_user.test", "uid", regexp.MustCompile(`^[0-9]+$`)),
+					r.TestCheckResourceAttrWith(
+						"synology_core_user.test",
+						"name",
+						func(v string) error {
+							if v != name {
+								return fmt.Errorf("name")
+							}
+							return nil
+						},
+					),
+					r.TestMatchResourceAttr(
+						"synology_core_user.test",
+						"uid",
+						regexp.MustCompile(`^[0-9]+$`),
+					),
 				),
 			},
 		},

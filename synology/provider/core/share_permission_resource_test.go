@@ -107,16 +107,21 @@ func TestApply_RejectsAdminDeclaredEntries(t *testing.T) {
 	}
 	r := &SharePermissionResource{client: stub}
 
-	plan := newSharePermissionModel(t, "myshare", core.ShareUserGroupTypeLocalGroup, []sharePermissionEntryModel{
-		{
-			Name:       types.StringValue("administrators"),
-			IsReadonly: types.BoolValue(false),
-			IsWritable: types.BoolValue(true),
-			IsDeny:     types.BoolValue(false),
-			IsCustom:   types.BoolValue(false),
-			IsAdmin:    types.BoolValue(true),
+	plan := newSharePermissionModel(
+		t,
+		"myshare",
+		core.ShareUserGroupTypeLocalGroup,
+		[]sharePermissionEntryModel{
+			{
+				Name:       types.StringValue("administrators"),
+				IsReadonly: types.BoolValue(false),
+				IsWritable: types.BoolValue(true),
+				IsDeny:     types.BoolValue(false),
+				IsCustom:   types.BoolValue(false),
+				IsAdmin:    types.BoolValue(true),
+			},
 		},
-	})
+	)
 
 	err := r.apply(ctx, plan)
 	if err == nil {
@@ -149,15 +154,20 @@ func TestApply_RevokesRowsAbsentFromConfig(t *testing.T) {
 	r := &SharePermissionResource{client: stub}
 
 	// Config declares only alice; bob was granted out-of-band.
-	plan := newSharePermissionModel(t, "myshare", core.ShareUserGroupTypeLocalUser, []sharePermissionEntryModel{
-		{
-			Name:       types.StringValue("alice"),
-			IsReadonly: types.BoolValue(false),
-			IsWritable: types.BoolValue(true),
-			IsDeny:     types.BoolValue(false),
-			IsCustom:   types.BoolValue(false),
+	plan := newSharePermissionModel(
+		t,
+		"myshare",
+		core.ShareUserGroupTypeLocalUser,
+		[]sharePermissionEntryModel{
+			{
+				Name:       types.StringValue("alice"),
+				IsReadonly: types.BoolValue(false),
+				IsWritable: types.BoolValue(true),
+				IsDeny:     types.BoolValue(false),
+				IsCustom:   types.BoolValue(false),
+			},
 		},
-	})
+	)
 
 	if err := r.apply(ctx, plan); err != nil {
 		t.Fatalf("apply() error = %v", err)
@@ -271,10 +281,15 @@ func TestPlanEntries_SortsByName(t *testing.T) {
 	ctx := context.Background()
 	r := &SharePermissionResource{}
 
-	plan := newSharePermissionModel(t, "myshare", core.ShareUserGroupTypeLocalUser, []sharePermissionEntryModel{
-		{Name: types.StringValue("zed"), IsReadonly: types.BoolValue(true)},
-		{Name: types.StringValue("alice"), IsWritable: types.BoolValue(true)},
-	})
+	plan := newSharePermissionModel(
+		t,
+		"myshare",
+		core.ShareUserGroupTypeLocalUser,
+		[]sharePermissionEntryModel{
+			{Name: types.StringValue("zed"), IsReadonly: types.BoolValue(true)},
+			{Name: types.StringValue("alice"), IsWritable: types.BoolValue(true)},
+		},
+	)
 
 	entries, err := r.planEntries(ctx, plan)
 	if err != nil {
