@@ -179,7 +179,11 @@ func TestModifyPlan_PreservesConfiguredTrueFlag(t *testing.T) {
 	}
 
 	var correctedPermission types.Set
-	if diags := resp.Plan.GetAttribute(ctx, path.Root("permission"), &correctedPermission); diags.HasError() {
+	if diags := resp.Plan.GetAttribute(
+		ctx,
+		path.Root("permission"),
+		&correctedPermission,
+	); diags.HasError() {
 		t.Fatalf("reading corrected permission from resp.Plan: %s", diags)
 	}
 
@@ -290,10 +294,17 @@ func TestModifyPlan_AllFlagsRoundTrip(t *testing.T) {
 			}
 
 			var correctedPermission types.Set
-			if diags := resp.Plan.GetAttribute(ctx, path.Root("permission"), &correctedPermission); diags.HasError() {
+			if diags := resp.Plan.GetAttribute(
+				ctx,
+				path.Root("permission"),
+				&correctedPermission,
+			); diags.HasError() {
 				t.Fatalf("reading corrected permission: %s", diags)
 			}
-			entries, err := r.planEntries(ctx, SharePermissionResourceModel{Permission: correctedPermission})
+			entries, err := r.planEntries(
+				ctx,
+				SharePermissionResourceModel{Permission: correctedPermission},
+			)
 			if err != nil {
 				t.Fatalf("planEntries() error = %v", err)
 			}

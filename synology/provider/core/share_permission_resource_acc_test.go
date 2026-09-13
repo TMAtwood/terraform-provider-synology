@@ -19,52 +19,64 @@ import (
 // list the infra repo writes for photo/homes. A one-block config fails
 // after apply with extra set elements (PLAT-741, live NAS).
 func TestAccSharePermissionResource_basic(t *testing.T) {
-	share := "tofuacc-sp741"
-	userA := "tofuacc-u741a"
-	userB := "tofuacc-u741b"
-
 	r.Test(t, r.TestCase{
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
 		Steps: []r.TestStep{
 			{
-				Config: sharePermissionAccConfig(share, userA, userB, `
+				Config: sharePermissionAccConfig(`
   permission {
     name        = synology_core_user.a.name
     is_writable = true
   }
   permission { name = synology_core_user.b.name }
-`+nasLocalUsersNoAccess),
+` + nasLocalUsersNoAccess),
 				Check: r.ComposeTestCheckFunc(
-					r.TestCheckResourceAttr("synology_core_share_permission.test", "share", share),
-					r.TestCheckResourceAttr("synology_core_share_permission.test", "user_group_type", "local_user"),
-					r.TestCheckTypeSetElemNestedAttrs("synology_core_share_permission.test", "permission.*", map[string]string{
-						"name":        userA,
-						"is_writable": "true",
-						"is_readonly": "false",
-						"is_deny":     "false",
-						"is_custom":   "false",
-					}),
+					r.TestCheckResourceAttr(
+						"synology_core_share_permission.test",
+						"share",
+						accShareName,
+					),
+					r.TestCheckResourceAttr(
+						"synology_core_share_permission.test",
+						"user_group_type",
+						"local_user",
+					),
+					r.TestCheckTypeSetElemNestedAttrs(
+						"synology_core_share_permission.test",
+						"permission.*",
+						map[string]string{
+							"name":        accUserA,
+							"is_writable": "true",
+							"is_readonly": "false",
+							"is_deny":     "false",
+							"is_custom":   "false",
+						},
+					),
 				),
 			},
 			{
-				Config: sharePermissionAccConfig(share, userA, userB, `
+				Config: sharePermissionAccConfig(`
   permission {
     name         = synology_core_user.a.name
     is_readonly  = true
     is_writable  = false
   }
   permission { name = synology_core_user.b.name }
-`+nasLocalUsersNoAccess),
+` + nasLocalUsersNoAccess),
 				Check: r.ComposeTestCheckFunc(
-					r.TestCheckTypeSetElemNestedAttrs("synology_core_share_permission.test", "permission.*", map[string]string{
-						"name":        userA,
-						"is_writable": "false",
-						"is_readonly": "true",
-					}),
+					r.TestCheckTypeSetElemNestedAttrs(
+						"synology_core_share_permission.test",
+						"permission.*",
+						map[string]string{
+							"name":        accUserA,
+							"is_writable": "false",
+							"is_readonly": "true",
+						},
+					),
 				),
 			},
 			{
-				Config: sharePermissionAccConfig(share, userA, userB, `
+				Config: sharePermissionAccConfig(`
   permission {
     name         = synology_core_user.a.name
     is_readonly  = true
@@ -73,45 +85,61 @@ func TestAccSharePermissionResource_basic(t *testing.T) {
     name        = synology_core_user.b.name
     is_writable = true
   }
-`+nasLocalUsersNoAccess),
+` + nasLocalUsersNoAccess),
 				Check: r.ComposeTestCheckFunc(
-					r.TestCheckTypeSetElemNestedAttrs("synology_core_share_permission.test", "permission.*", map[string]string{
-						"name":        userA,
-						"is_readonly": "true",
-						"is_writable": "false",
-					}),
-					r.TestCheckTypeSetElemNestedAttrs("synology_core_share_permission.test", "permission.*", map[string]string{
-						"name":        userB,
-						"is_writable": "true",
-						"is_readonly": "false",
-					}),
+					r.TestCheckTypeSetElemNestedAttrs(
+						"synology_core_share_permission.test",
+						"permission.*",
+						map[string]string{
+							"name":        accUserA,
+							"is_readonly": "true",
+							"is_writable": "false",
+						},
+					),
+					r.TestCheckTypeSetElemNestedAttrs(
+						"synology_core_share_permission.test",
+						"permission.*",
+						map[string]string{
+							"name":        accUserB,
+							"is_writable": "true",
+							"is_readonly": "false",
+						},
+					),
 				),
 			},
 			{
-				Config: sharePermissionAccConfig(share, userA, userB, `
+				Config: sharePermissionAccConfig(`
   permission {
     name         = synology_core_user.a.name
     is_readonly  = true
   }
   permission { name = synology_core_user.b.name }
-`+nasLocalUsersNoAccess),
+` + nasLocalUsersNoAccess),
 				Check: r.ComposeTestCheckFunc(
-					r.TestCheckTypeSetElemNestedAttrs("synology_core_share_permission.test", "permission.*", map[string]string{
-						"name":        userA,
-						"is_readonly": "true",
-						"is_writable": "false",
-					}),
-					r.TestCheckTypeSetElemNestedAttrs("synology_core_share_permission.test", "permission.*", map[string]string{
-						"name":        userB,
-						"is_writable": "false",
-						"is_readonly": "false",
-					}),
+					r.TestCheckTypeSetElemNestedAttrs(
+						"synology_core_share_permission.test",
+						"permission.*",
+						map[string]string{
+							"name":        accUserA,
+							"is_readonly": "true",
+							"is_writable": "false",
+						},
+					),
+					r.TestCheckTypeSetElemNestedAttrs(
+						"synology_core_share_permission.test",
+						"permission.*",
+						map[string]string{
+							"name":        accUserB,
+							"is_writable": "false",
+							"is_readonly": "false",
+						},
+					),
 				),
 			},
 			{
 				ResourceName:                         "synology_core_share_permission.test",
 				ImportState:                          true,
-				ImportStateId:                        share + "/local_user",
+				ImportStateId:                        accShareName + "/local_user",
 				ImportStateVerify:                    true,
 				ImportStateVerifyIdentifierAttribute: "share",
 			},
@@ -130,7 +158,13 @@ const nasLocalUsersNoAccess = `
   permission { name = "windows_drives" }
 `
 
-func sharePermissionAccConfig(share, userA, userB, permissionBlocks string) string {
+const (
+	accShareName = "tofuacc-sp741"
+	accUserA     = "tofuacc-u741a"
+	accUserB     = "tofuacc-u741b"
+)
+
+func sharePermissionAccConfig(permissionBlocks string) string {
 	return fmt.Sprintf(`
 resource "synology_core_share" "test" {
   name     = %q
@@ -159,5 +193,5 @@ resource "synology_core_share_permission" "test" {
   user_group_type = "local_user"
 %s
 }
-`, share, userA, userB, permissionBlocks)
+`, accShareName, accUserA, accUserB, permissionBlocks)
 }

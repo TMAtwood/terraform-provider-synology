@@ -22,7 +22,11 @@ resource "synology_container_registry" "test" {
 `, name),
 				Check: r.ComposeTestCheckFunc(
 					r.TestCheckResourceAttr("synology_container_registry.test", "name", name),
-					r.TestCheckResourceAttr("synology_container_registry.test", "url", "https://example.com/tfacc"),
+					r.TestCheckResourceAttr(
+						"synology_container_registry.test",
+						"url",
+						"https://example.com/tfacc",
+					),
 					r.TestCheckResourceAttr("synology_container_registry.test", "syno", "false"),
 				),
 			},

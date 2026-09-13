@@ -22,7 +22,11 @@ resource "synology_core_group" "test" {
 `, name),
 				Check: r.ComposeTestCheckFunc(
 					r.TestCheckResourceAttr("synology_core_group.test", "name", name),
-					r.TestCheckResourceAttr("synology_core_group.test", "description", "tfacc group"),
+					r.TestCheckResourceAttr(
+						"synology_core_group.test",
+						"description",
+						"tfacc group",
+					),
 				),
 			},
 			{
@@ -33,7 +37,11 @@ resource "synology_core_group" "test" {
 }
 `, name),
 				Check: r.ComposeTestCheckFunc(
-					r.TestCheckResourceAttr("synology_core_group.test", "description", "tfacc group updated"),
+					r.TestCheckResourceAttr(
+						"synology_core_group.test",
+						"description",
+						"tfacc group updated",
+					),
 				),
 			},
 			{

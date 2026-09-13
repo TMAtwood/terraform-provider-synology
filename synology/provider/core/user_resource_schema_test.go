@@ -49,8 +49,14 @@ func TestUserSchema_PasswordIsWriteOnly(t *testing.T) {
 func TestUserSchema_DocumentsWriteOnlyPassword(t *testing.T) {
 	t.Parallel()
 	s := userSchema(t)
-	attr := s.Attributes["password_wo"].(schema.StringAttribute)
+	attr, ok := s.Attributes["password_wo"].(schema.StringAttribute)
+	if !ok {
+		t.Fatalf("password_wo is %T, want schema.StringAttribute", s.Attributes["password_wo"])
+	}
 	if !strings.Contains(strings.ToLower(attr.MarkdownDescription), "never stored") {
-		t.Errorf("password_wo description should say it is never stored; got %q", attr.MarkdownDescription)
+		t.Errorf(
+			"password_wo description should say it is never stored; got %q",
+			attr.MarkdownDescription,
+		)
 	}
 }
