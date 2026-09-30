@@ -621,8 +621,13 @@ func (f *ProjectResource) Update(
 		secretChanged = true
 	}
 
+	// Content is planned from services, networks, volumes, configs and secrets,
+	// and Read refreshes it from DSM, so it can differ with no services diff:
+	// a networks or volumes edit, or compose edited on DSM (PLAT-902).
+	contentChanged := !plan.Content.IsUnknown() && !plan.Content.Equal(state.Content)
+
 	runDesired := !plan.Run.IsNull() && !plan.Run.IsUnknown() && plan.Run.ValueBool()
-	runOnly := !servicesChanged && !configChanged && !secretChanged
+	runOnly := !servicesChanged && !configChanged && !secretChanged && !contentChanged
 
 	if runOnly && !runDesired {
 		// Nothing to do, but still persist planned attrs (especially run=false).
@@ -648,7 +653,7 @@ func (f *ProjectResource) Update(
 		f.handleSecrets(ctx, plan)
 	}
 
-	if servicesChanged || configChanged || secretChanged {
+	if servicesChanged || configChanged || secretChanged || contentChanged {
 		var content string
 		if !plan.Content.IsNull() && !plan.Content.IsUnknown() {
 			content = plan.Content.ValueString()
@@ -676,52 +681,50 @@ func (f *ProjectResource) Update(
 			}
 		}
 
-		if servicesChanged {
-			proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
+		proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to get project on update", err.Error())
+			return
+		}
+
+		if proj.Content != content {
+			if proj.IsRunning() {
+				_, err = f.client.ProjectStopStream(ctx, docker.ProjectStreamRequest{
+					ID: plan.ID.ValueString(),
+				})
+				if err != nil {
+					resp.Diagnostics.AddError("Failed to stop project", err.Error())
+					return
+				}
+				time.Sleep(2 * time.Second) // Wait for the project to stop
+			}
+
+			_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
+				ID:                    plan.ID.ValueString(),
+				Content:               content,
+				EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
+				ServicePortalName:     servicePortal.Name.ValueString(),
+				ServicePortalPort:     servicePortal.Port.ValueInt64Pointer(),
+				ServicePortalProtocol: servicePortal.Protocol.ValueString(),
+			})
 			if err != nil {
-				resp.Diagnostics.AddError("Failed to get project on update", err.Error())
+				resp.Diagnostics.AddError("Failed to update project", err.Error())
 				return
 			}
 
-			if proj.Content != content {
-				if proj.IsRunning() {
-					_, err = f.client.ProjectStopStream(ctx, docker.ProjectStreamRequest{
-						ID: plan.ID.ValueString(),
-					})
-					if err != nil {
-						resp.Diagnostics.AddError("Failed to stop project", err.Error())
-						return
-					}
-					time.Sleep(2 * time.Second) // Wait for the project to stop
-				}
-
-				_, err = f.client.ProjectUpdate(ctx, docker.ProjectUpdateRequest{
-					ID:                    plan.ID.ValueString(),
-					Content:               content,
-					EnableServicePortal:   servicePortal.Enable.ValueBoolPointer(),
-					ServicePortalName:     servicePortal.Name.ValueString(),
-					ServicePortalPort:     servicePortal.Port.ValueInt64Pointer(),
-					ServicePortalProtocol: servicePortal.Protocol.ValueString(),
-				})
-				if err != nil {
-					resp.Diagnostics.AddError("Failed to update project", err.Error())
-					return
-				}
-
-				// DSM can report success and keep the old compose (PLAT-902).
-				// Verify the end state rather than trust the response (ADR-0010).
-				stored, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
-				if err != nil {
-					resp.Diagnostics.AddError("Failed to get project after update", err.Error())
-					return
-				}
-				if stored.Content != content {
-					resp.Diagnostics.AddError(
-						"Project update did not persist",
-						"DSM accepted the update but still stores different compose content.",
-					)
-					return
-				}
+			// DSM can report success and keep the old compose (PLAT-902).
+			// Verify the end state rather than trust the response (ADR-0010).
+			stored, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to get project after update", err.Error())
+				return
+			}
+			if stored.Content != content {
+				resp.Diagnostics.AddError(
+					"Project update did not persist",
+					"DSM accepted the update but still stores different compose content.",
+				)
+				return
 			}
 		}
 	}
