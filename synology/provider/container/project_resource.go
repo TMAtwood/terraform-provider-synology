@@ -707,6 +707,21 @@ func (f *ProjectResource) Update(
 					resp.Diagnostics.AddError("Failed to update project", err.Error())
 					return
 				}
+
+				// DSM can report success and keep the old compose (PLAT-902).
+				// Verify the end state rather than trust the response (ADR-0010).
+				stored, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
+				if err != nil {
+					resp.Diagnostics.AddError("Failed to get project after update", err.Error())
+					return
+				}
+				if stored.Content != content {
+					resp.Diagnostics.AddError(
+						"Project update did not persist",
+						"DSM accepted the update but still stores different compose content.",
+					)
+					return
+				}
 			}
 		}
 	}
