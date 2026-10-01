@@ -48,11 +48,6 @@ func (l *logConsumer) Accept(logEntry testcontainers.Log) {
 }
 
 func runAcceptanceTests(m *testing.M) int {
-	// Disable Ryuk reaper to avoid connection issues in local development
-	if err := os.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true"); err != nil {
-		panic(err)
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -78,6 +73,7 @@ func runAcceptanceTests(m *testing.M) int {
 		if downErr := dc.Down(
 			context.Background(),
 			testcompose.RemoveOrphans(true),
+			testcompose.RemoveVolumes(true),
 			testcompose.RemoveImagesLocal,
 		); downErr != nil {
 			fmt.Fprintf(os.Stderr, "virtual DSM compose down failed: %v\n", downErr)
@@ -93,6 +89,7 @@ func runAcceptanceTests(m *testing.M) int {
 		if err := dc.Down(
 			context.Background(),
 			testcompose.RemoveOrphans(true),
+			testcompose.RemoveVolumes(true),
 			testcompose.RemoveImagesLocal,
 		); err != nil {
 			panic(err)
