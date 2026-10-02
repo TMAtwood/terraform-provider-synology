@@ -924,7 +924,7 @@ func (f *ProjectResource) Schema(
 										Optional:            true,
 									},
 									"mode": schema.StringAttribute{
-										MarkdownDescription: "The mode of the config.",
+										MarkdownDescription: "Unix file mode of the mounted config, in octal notation (for example `0400` or `0660`). Compose stores the decimal permission bits, so octal 0400 is rendered as 256.",
 										Optional:            true,
 									},
 									"source": schema.StringAttribute{
@@ -1162,7 +1162,7 @@ func (f *ProjectResource) Schema(
 										Optional:            true,
 									},
 									"mode": schema.StringAttribute{
-										MarkdownDescription: "The mode of the config.",
+										MarkdownDescription: "Unix file mode of the mounted secret, in octal notation (for example `0400` or `0660`). Compose stores the decimal permission bits, so octal 0400 is rendered as 256.",
 										Optional:            true,
 									},
 									"source": schema.StringAttribute{
