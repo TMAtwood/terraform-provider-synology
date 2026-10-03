@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 	"unsafe"
 
@@ -616,16 +615,7 @@ func (m Service) AsComposeConfig(
 					UID:    c.UID.ValueString(),
 					GID:    c.GID.ValueString(),
 				}
-				if !c.Mode.IsNull() && !c.Mode.IsUnknown() {
-					mode, err := strconv.ParseUint(c.Mode.ValueString(), 10, 32)
-
-					if err != nil {
-						log.Printf("error parsing mode: %v", err)
-					} else {
-						mode32 := uint32(mode)
-						cfg.Mode = &mode32
-					}
-				}
+				assignFileMode(c.Mode, &cfg.Mode, &d)
 				service.Configs = append(service.Configs, cfg)
 			}
 		} else {
@@ -644,16 +634,7 @@ func (m Service) AsComposeConfig(
 					UID:    c.UID.ValueString(),
 					GID:    c.GID.ValueString(),
 				}
-				if !c.Mode.IsNull() && !c.Mode.IsUnknown() {
-					mode, err := strconv.ParseUint(c.Mode.ValueString(), 10, 32)
-
-					if err != nil {
-						log.Printf("error parsing mode: %v", err)
-					} else {
-						mode32 := uint32(mode)
-						cfg.Mode = &mode32
-					}
-				}
+				assignFileMode(c.Mode, &cfg.Mode, &d)
 				service.Secrets = append(service.Secrets, cfg)
 			}
 		} else {

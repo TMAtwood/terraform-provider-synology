@@ -353,7 +353,7 @@ Optional:
 Optional:
 
 - `gid` (String) The GID of the config.
-- `mode` (String) The mode of the config.
+- `mode` (String) Unix file mode of the mounted config, in octal notation (for example `0400` or `0660`). Compose stores the decimal permission bits, so octal 0400 is rendered as 256.
 - `source` (String) The source of the config.
 - `target` (String) The target of the config.
 - `uid` (String) The UID of the config.
@@ -425,7 +425,7 @@ Optional:
 Optional:
 
 - `gid` (String) The GID of the config.
-- `mode` (String) The mode of the config.
+- `mode` (String) Unix file mode of the mounted secret, in octal notation (for example `0400` or `0660`). Compose stores the decimal permission bits, so octal 0400 is rendered as 256.
 - `source` (String) The source of the config.
 - `target` (String) The target of the config.
 - `uid` (String) The UID of the config.
