@@ -4,8 +4,6 @@
     push:
       branches:
         - main
-        # Temporary: prove a push upload, not only pull_request, accepts the token.
-        - cursor/gosec-sarif-permissions-86ac
       paths:
         - '**.go'
         - 'vendor/**'
