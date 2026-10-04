@@ -86,6 +86,18 @@ func (m useArgumentsForUnknownContent) PlanModifyString(
 		return
 	}
 
-	// Set the plan value to the yaml content
+	// Key order is not a change. DSM stores the same compose with different
+	// mapping order than this render. Keep the stored text so the plan stays
+	// empty and an apply does not restart the project (PLAT-947). A real
+	// value change, including a secret mode change, still plans the render.
+	if !req.StateValue.IsNull() && !req.StateValue.IsUnknown() &&
+		req.StateValue.ValueString() != "" {
+		same, err := composeSemanticallyEqual(req.StateValue.ValueString(), yamlContent)
+		if err == nil && same {
+			resp.PlanValue = req.StateValue
+			return
+		}
+	}
+
 	resp.PlanValue = types.StringValue(yamlContent)
 }

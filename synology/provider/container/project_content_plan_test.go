@@ -13,6 +13,7 @@ import (
 	"github.com/synology-community/go-synology/pkg/api/docker"
 	"github.com/synology-community/terraform-provider-synology/synology/provider/container/models"
 	"github.com/synology-community/terraform-provider-synology/synology/provider/container/modifier"
+	"gopkg.in/yaml.v3"
 )
 
 // planWithServiceImage builds a plan for synology_container_project whose
@@ -79,6 +80,79 @@ func TestContentPlan_ServicesChangeOverridesStoredContent(t *testing.T) {
 
 	if got := resp.PlanValue.ValueString(); got != want {
 		t.Errorf("planned content = %q, want content rendered from services %q", got, want)
+	}
+}
+
+// TestContentPlan_KeyOrderKeepsStoredContent is the PLAT-947 regression.
+// DSM stores the same compose with a different mapping order. That must not
+// plan an update. A changed image still must.
+func TestContentPlan_KeyOrderKeepsStoredContent(t *testing.T) {
+	ctx := context.Background()
+
+	plan := planWithServiceImage(t, ctx, "nginx:1")
+	if diags := plan.SetAttribute(
+		ctx,
+		path.Root("services").AtMapKey("db").AtName("image"),
+		"postgres:16",
+	); diags.HasError() {
+		t.Fatalf("plan.SetAttribute() diagnostics: %s", diags)
+	}
+
+	var model models.ProjectResourceModel
+	if diags := plan.Get(ctx, &model); diags.HasError() {
+		t.Fatalf("plan.Get() diagnostics: %s", diags)
+	}
+	var rendered string
+	if diags := model.ConfigRaw(ctx, &rendered); diags.HasError() {
+		t.Fatalf("ConfigRaw() diagnostics: %s", diags)
+	}
+	stored := reorderYAMLMappings(t, rendered)
+	if stored == rendered {
+		t.Fatal("reorder produced the same text, so the test would not prove order independence")
+	}
+
+	req := planmodifier.StringRequest{
+		Path:        path.Root("content"),
+		Plan:        plan,
+		ConfigValue: types.StringNull(),
+		StateValue:  types.StringValue(stored),
+		PlanValue:   types.StringValue(stored),
+	}
+	resp := planmodifier.StringResponse{PlanValue: req.PlanValue}
+	modifier.UseSchemaForUnknownContent().PlanModifyString(ctx, req, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("PlanModifyString() diagnostics: %s", resp.Diagnostics)
+	}
+	if got := resp.PlanValue.ValueString(); got != stored {
+		t.Errorf("planned content changed for a key reorder\n got %q\nwant %q", got, stored)
+	}
+}
+
+func reorderYAMLMappings(t *testing.T, doc string) string {
+	t.Helper()
+	var node yaml.Node
+	if err := yaml.Unmarshal([]byte(doc), &node); err != nil {
+		t.Fatal(err)
+	}
+	swapFirstMappingKeys(&node)
+	out, err := yaml.Marshal(&node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
+
+func swapFirstMappingKeys(node *yaml.Node) {
+	if node == nil {
+		return
+	}
+	if node.Kind == yaml.MappingNode && len(node.Content) >= 4 {
+		node.Content[0], node.Content[2] = node.Content[2], node.Content[0]
+		node.Content[1], node.Content[3] = node.Content[3], node.Content[1]
+		return
+	}
+	for _, child := range node.Content {
+		swapFirstMappingKeys(child)
 	}
 }
 
