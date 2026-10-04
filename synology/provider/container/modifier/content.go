@@ -86,6 +86,22 @@ func (m useArgumentsForUnknownContent) PlanModifyString(
 		return
 	}
 
-	// Set the plan value to the yaml content
+	// DSM keeps the compose bytes from the last write. A later render of the
+	// same values can reorder mapping keys (container_name, deploy, ports,
+	// command, healthcheck). Terraform diffs content as a string, so that
+	// reorder plans an in-place update and can restart the project. Keep the
+	// stored bytes when the documents are the same values. A real edit still
+	// replaces them. Invalid stored YAML falls through so the plan shows the
+	// render instead of failing the whole plan.
+	stored := req.StateValue
+	storedKnown := !stored.IsNull() && !stored.IsUnknown() && stored.ValueString() != ""
+	if storedKnown {
+		equal, err := composeSemanticallyEqual(stored.ValueString(), yamlContent)
+		if err == nil && equal {
+			resp.PlanValue = stored
+			return
+		}
+	}
+
 	resp.PlanValue = types.StringValue(yamlContent)
 }
