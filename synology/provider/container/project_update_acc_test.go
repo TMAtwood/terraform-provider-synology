@@ -59,3 +59,49 @@ func TestAccProjectResource_servicesUpdateReachesDSM(t *testing.T) {
 		},
 	})
 }
+
+func TestAccProjectResource_contentOnlyUpdate(t *testing.T) {
+	const project = "tofuacc-plat1365"
+	config := func(image string) string {
+		content := "services:\n  app:\n    image: " + image + "\n    command: [sleep, infinity]\n"
+		return fmt.Sprintf(`
+resource "synology_container_project" "test" {
+  name       = %[1]q
+  share_path = "/tofuacc/%[1]s"
+  run        = true
+  content    = %[2]q
+}
+`, project, content)
+	}
+
+	const address = "synology_container_project.test"
+	var originalID string
+	r.Test(t, r.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
+		Steps: []r.TestStep{
+			{
+				Config: config("busybox:1.36"),
+				Check: r.TestCheckResourceAttrWith(address, "id", func(id string) error {
+					originalID = id
+					return nil
+				}),
+			},
+			{
+				Config: config("busybox:1.37"),
+				Check: r.ComposeTestCheckFunc(
+					r.TestCheckResourceAttrWith(address, "id", func(id string) error {
+						if id != originalID {
+							return fmt.Errorf("project ID changed from %s to %s", originalID, id)
+						}
+						return nil
+					}),
+					r.TestMatchResourceAttr(
+						address,
+						"content",
+						regexp.MustCompile(`image: busybox:1\.37\b`),
+					),
+				),
+			},
+		},
+	})
+}
