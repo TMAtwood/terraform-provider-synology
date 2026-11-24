@@ -34,7 +34,10 @@ import (
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &ProjectResource{}
+var (
+	_ resource.Resource               = &ProjectResource{}
+	_ resource.ResourceWithModifyPlan = &ProjectResource{}
+)
 
 func NewProjectResource() resource.Resource {
 	return &ProjectResource{}
@@ -631,6 +634,9 @@ func (f *ProjectResource) Update(
 
 	if runOnly && !runDesired {
 		// Nothing to do, but still persist planned attrs (especially run=false).
+		plan.CreatedAt = state.CreatedAt
+		plan.Status = state.Status
+		plan.UpdatedAt = state.UpdatedAt
 		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 		return
 	}
@@ -767,6 +773,38 @@ func (f *ProjectResource) Update(
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// ModifyPlan implements resource.ResourceWithModifyPlan.
+func (f *ProjectResource) ModifyPlan(
+	ctx context.Context,
+	req resource.ModifyPlanRequest,
+	resp *resource.ModifyPlanResponse,
+) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var plan, state models.ProjectResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if plan.Content.Equal(state.Content) && plan.Services.Equal(state.Services) &&
+		plan.Configs.Equal(state.Configs) && plan.Secrets.Equal(state.Secrets) {
+		return
+	}
+
+	// Rendering compose can introduce a change after the framework has
+	// decided to keep computed attributes known. DSM sets these values.
+	resp.Diagnostics.Append(
+		resp.Plan.SetAttribute(ctx, path.Root("created_at"), timetypes.NewRFC3339Unknown())...)
+	resp.Diagnostics.Append(
+		resp.Plan.SetAttribute(ctx, path.Root("status"), types.StringUnknown())...)
+	resp.Diagnostics.Append(
+		resp.Plan.SetAttribute(ctx, path.Root("updated_at"), timetypes.NewRFC3339Unknown())...)
 }
 
 // Metadata implements resource.Resource.

@@ -3,7 +3,9 @@ package container
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -128,7 +130,10 @@ type stubProjectAPI struct {
 }
 
 func (s *stubProjectAPI) ProjectGet(_ context.Context, id string) (*docker.Project, error) {
-	return &docker.Project{ID: id, Content: s.stored, Status: "STOPPED"}, nil
+	return &docker.Project{
+		ID: id, Content: s.stored, Status: "STOPPED",
+		UpdatedAt: time.Unix(int64(s.updates), 0),
+	}, nil
 }
 
 func (s *stubProjectAPI) ProjectUpdate(
@@ -159,6 +164,9 @@ func TestUpdate_ContentDriftWithUnchangedServicesReachesDSM(t *testing.T) {
 	}
 	planned.ID = types.StringValue("p1")
 	planned.Content = types.StringValue(rendered)
+	planned.CreatedAt = timetypes.NewRFC3339TimeValue(time.Unix(0, 0))
+	planned.Status = types.StringValue("STOPPED")
+	planned.UpdatedAt = planned.CreatedAt
 
 	prior := planned
 	prior.Content = types.StringValue("services:\n  app:\n    image: nginx:edited-on-dsm\n")
@@ -178,8 +186,28 @@ func TestUpdate_ContentDriftWithUnchangedServicesReachesDSM(t *testing.T) {
 
 	api := &stubProjectAPI{stored: prior.Content.ValueString()}
 	p := &ProjectResource{client: api}
+	// The content attribute modifier has already rendered the correction, but
+	// the framework kept DSM attributes known because the config did not change.
+	planner, ok := any(p).(resource.ResourceWithModifyPlan)
+	if !ok {
+		t.Fatal("project must invalidate computed values after rendering changed content")
+	}
+	planResp := resource.ModifyPlanResponse{Plan: plan}
+	planner.ModifyPlan(ctx, resource.ModifyPlanRequest{Plan: plan, State: state}, &planResp)
+	if planResp.Diagnostics.HasError() {
+		t.Fatalf("ModifyPlan() diagnostics: %s", planResp.Diagnostics)
+	}
+	var update models.ProjectResourceModel
+	if diags := planResp.Plan.Get(ctx, &update); diags.HasError() {
+		t.Fatalf("plan.Get() diagnostics: %s", diags)
+	}
+	if !update.UpdatedAt.IsUnknown() || !update.CreatedAt.IsUnknown() ||
+		!update.Status.IsUnknown() {
+		t.Fatal("DSM-managed fields must be unknown when rendered content changes")
+	}
+
 	resp := resource.UpdateResponse{State: respState}
-	p.Update(ctx, resource.UpdateRequest{Plan: plan, State: state}, &resp)
+	p.Update(ctx, resource.UpdateRequest{Plan: planResp.Plan, State: state}, &resp)
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Update() diagnostics: %s", resp.Diagnostics)
 	}
@@ -193,5 +221,19 @@ func TestUpdate_ContentDriftWithUnchangedServicesReachesDSM(t *testing.T) {
 	}
 	if got.Content.ValueString() != rendered {
 		t.Errorf("state content = %q, want planned content %q", got.Content.ValueString(), rendered)
+	}
+	if want := timetypes.NewRFC3339TimeValue(time.Unix(1, 0)); !got.UpdatedAt.Equal(want) {
+		t.Errorf("state updated_at = %s, want DSM's %s", got.UpdatedAt, want)
+	}
+
+	steadyPlan := tfsdk.Plan{Schema: resp.State.Schema, Raw: resp.State.Raw}
+	steadyResp := resource.ModifyPlanResponse{Plan: steadyPlan}
+	planner.ModifyPlan(
+		ctx,
+		resource.ModifyPlanRequest{Plan: steadyPlan, State: resp.State},
+		&steadyResp,
+	)
+	if steadyResp.Diagnostics.HasError() || !steadyResp.Plan.Raw.Equal(steadyPlan.Raw) {
+		t.Fatalf("unchanged content must converge: %s", steadyResp.Diagnostics)
 	}
 }
