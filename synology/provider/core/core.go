@@ -18,6 +18,7 @@ func Resources() []func() resource.Resource {
 		NewUserResource,
 		NewGroupResource,
 		NewShareResource,
+		NewSharePermissionResource,
 		NewFirewallResource,
 		NewFirewallProfileResource,
 	}

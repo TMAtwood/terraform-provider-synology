@@ -38,7 +38,11 @@ resource "synology_core_share" "test" {
 }
 `, name),
 				Check: r.ComposeTestCheckFunc(
-					r.TestCheckResourceAttr("synology_core_share.test", "desc", "tfacc share updated"),
+					r.TestCheckResourceAttr(
+						"synology_core_share.test",
+						"desc",
+						"tfacc share updated",
+					),
 					r.TestCheckResourceAttr("synology_core_share.test", "hidden", "true"),
 				),
 			},

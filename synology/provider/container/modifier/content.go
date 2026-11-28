@@ -44,15 +44,6 @@ func (m useArgumentsForUnknownContent) PlanModifyString(
 		return
 	}
 
-	// Import / freeze path: content only in state (config omitted, often with
-	// lifecycle.ignore_changes). Keep the prior value so we do not rewrite
-	// live compose to an empty "services: {}" document (PLAT-552).
-	if !req.StateValue.IsNull() && !req.StateValue.IsUnknown() &&
-		req.StateValue.ValueString() != "" {
-		resp.PlanValue = req.StateValue
-		return
-	}
-
 	// Get the current plan value - Should run after config modification
 	var config models.ProjectResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &config)...)
@@ -62,6 +53,24 @@ func (m useArgumentsForUnknownContent) PlanModifyString(
 			"failed to get plan value during plan modification",
 			"",
 		)
+		return
+	}
+
+	// Services not known until apply: Update renders content from them then.
+	if config.Services.IsUnknown() {
+		resp.PlanValue = types.StringUnknown()
+		return
+	}
+
+	// Import / freeze path: neither content nor services configured, content
+	// only in state. Keep the prior value so we do not rewrite live compose to
+	// an empty "services: {}" document (PLAT-552). Once services are
+	// configured they win over state, or a services change never reaches DSM
+	// and drift in the stored compose never shows in a plan (PLAT-902).
+	if len(config.Services.Elements()) == 0 &&
+		!req.StateValue.IsNull() && !req.StateValue.IsUnknown() &&
+		req.StateValue.ValueString() != "" {
+		resp.PlanValue = req.StateValue
 		return
 	}
 
@@ -77,6 +86,22 @@ func (m useArgumentsForUnknownContent) PlanModifyString(
 		return
 	}
 
-	// Set the plan value to the yaml content
+	// DSM keeps the compose bytes from the last write. A later render of the
+	// same values can reorder mapping keys (container_name, deploy, ports,
+	// command, healthcheck). Terraform diffs content as a string, so that
+	// reorder plans an in-place update and can restart the project. Keep the
+	// stored bytes when the documents are the same values. A real edit still
+	// replaces them. Invalid stored YAML falls through so the plan shows the
+	// render instead of failing the whole plan.
+	stored := req.StateValue
+	storedKnown := !stored.IsNull() && !stored.IsUnknown() && stored.ValueString() != ""
+	if storedKnown {
+		equal, err := composeSemanticallyEqual(stored.ValueString(), yamlContent)
+		if err == nil && equal {
+			resp.PlanValue = stored
+			return
+		}
+	}
+
 	resp.PlanValue = types.StringValue(yamlContent)
 }

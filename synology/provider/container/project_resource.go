@@ -34,7 +34,10 @@ import (
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &ProjectResource{}
+var (
+	_ resource.Resource               = &ProjectResource{}
+	_ resource.ResourceWithModifyPlan = &ProjectResource{}
+)
 
 func NewProjectResource() resource.Resource {
 	return &ProjectResource{}
@@ -621,11 +624,19 @@ func (f *ProjectResource) Update(
 		secretChanged = true
 	}
 
+	// Content is planned from services, networks, volumes, configs and secrets,
+	// and Read refreshes it from DSM, so it can differ with no services diff:
+	// a networks or volumes edit, or compose edited on DSM (PLAT-902).
+	contentChanged := !plan.Content.IsUnknown() && !plan.Content.Equal(state.Content)
+
 	runDesired := !plan.Run.IsNull() && !plan.Run.IsUnknown() && plan.Run.ValueBool()
-	runOnly := !servicesChanged && !configChanged && !secretChanged
+	runOnly := !servicesChanged && !configChanged && !secretChanged && !contentChanged
 
 	if runOnly && !runDesired {
 		// Nothing to do, but still persist planned attrs (especially run=false).
+		plan.CreatedAt = state.CreatedAt
+		plan.Status = state.Status
+		plan.UpdatedAt = state.UpdatedAt
 		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 		return
 	}
@@ -648,32 +659,32 @@ func (f *ProjectResource) Update(
 		f.handleSecrets(ctx, plan)
 	}
 
-	if servicesChanged || configChanged || secretChanged {
-		// Always rebuild compose from structured attributes when they change.
-		// Preferring plan.Content freezes stale YAML after PLAT-552's
-		// UseSchemaForUnknownContent (it keeps state content when config omits
-		// content, so service/secret edits never reached ProjectUpdate).
+	if servicesChanged || configChanged || secretChanged || contentChanged {
 		var content string
-		resp.Diagnostics.Append(
-			models.NewComposeContentBuilder(
-				ctx,
-			).SetServices(
-				&plan.Services,
-			).SetNetworks(
-				&plan.Networks,
-			).SetVolumes(
-				&plan.Volumes,
-			).SetConfigs(
-				&plan.Configs,
-			).SetSecrets(
-				&plan.Secrets,
-			).Build(
-				&content,
-			)...)
+		if !plan.Content.IsNull() && !plan.Content.IsUnknown() {
+			content = plan.Content.ValueString()
+		} else {
+			resp.Diagnostics.Append(
+				models.NewComposeContentBuilder(
+					ctx,
+				).SetServices(
+					&plan.Services,
+				).SetNetworks(
+					&plan.Networks,
+				).SetVolumes(
+					&plan.Volumes,
+				).SetConfigs(
+					&plan.Configs,
+				).SetSecrets(
+					&plan.Secrets,
+				).Build(
+					&content,
+				)...)
 
-		if resp.Diagnostics.HasError() {
-			resp.Diagnostics.AddError("Failed to build project content", "")
-			return
+			if resp.Diagnostics.HasError() {
+				resp.Diagnostics.AddError("Failed to build project content", "")
+				return
+			}
 		}
 
 		proj, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
@@ -704,6 +715,21 @@ func (f *ProjectResource) Update(
 			})
 			if err != nil {
 				resp.Diagnostics.AddError("Failed to update project", err.Error())
+				return
+			}
+
+			// DSM can report success and keep the old compose (PLAT-902).
+			// Verify the end state rather than trust the response (ADR-0010).
+			stored, err := f.client.ProjectGet(ctx, plan.ID.ValueString())
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to get project after update", err.Error())
+				return
+			}
+			if stored.Content != content {
+				resp.Diagnostics.AddError(
+					"Project update did not persist",
+					"DSM accepted the update but still stores different compose content.",
+				)
 				return
 			}
 		}
@@ -747,6 +773,38 @@ func (f *ProjectResource) Update(
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// ModifyPlan implements resource.ResourceWithModifyPlan.
+func (f *ProjectResource) ModifyPlan(
+	ctx context.Context,
+	req resource.ModifyPlanRequest,
+	resp *resource.ModifyPlanResponse,
+) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var plan, state models.ProjectResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if plan.Content.Equal(state.Content) && plan.Services.Equal(state.Services) &&
+		plan.Configs.Equal(state.Configs) && plan.Secrets.Equal(state.Secrets) {
+		return
+	}
+
+	// Rendering compose can introduce a change after the framework has
+	// decided to keep computed attributes known. DSM sets these values.
+	resp.Diagnostics.Append(
+		resp.Plan.SetAttribute(ctx, path.Root("created_at"), timetypes.NewRFC3339Unknown())...)
+	resp.Diagnostics.Append(
+		resp.Plan.SetAttribute(ctx, path.Root("status"), types.StringUnknown())...)
+	resp.Diagnostics.Append(
+		resp.Plan.SetAttribute(ctx, path.Root("updated_at"), timetypes.NewRFC3339Unknown())...)
 }
 
 // Metadata implements resource.Resource.
@@ -904,7 +962,7 @@ func (f *ProjectResource) Schema(
 										Optional:            true,
 									},
 									"mode": schema.StringAttribute{
-										MarkdownDescription: "The mode of the config.",
+										MarkdownDescription: "Unix file mode of the mounted config, in octal notation (for example `0400` or `0660`). Compose stores the decimal permission bits, so octal 0400 is rendered as 256.",
 										Optional:            true,
 									},
 									"source": schema.StringAttribute{
@@ -1142,7 +1200,7 @@ func (f *ProjectResource) Schema(
 										Optional:            true,
 									},
 									"mode": schema.StringAttribute{
-										MarkdownDescription: "The mode of the config.",
+										MarkdownDescription: "Unix file mode of the mounted secret, in octal notation (for example `0400` or `0660`). Compose stores the decimal permission bits, so octal 0400 is rendered as 256.",
 										Optional:            true,
 									},
 									"source": schema.StringAttribute{

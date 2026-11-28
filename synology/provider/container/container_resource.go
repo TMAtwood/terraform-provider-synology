@@ -185,7 +185,10 @@ func (r *ContainerResource) Configure(
 	r.client = c.DockerAPI()
 }
 
-func (r *ContainerResource) profile(ctx context.Context, data ContainerResourceModel) (docker.Container, error) {
+func (r *ContainerResource) profile(
+	ctx context.Context,
+	data ContainerResourceModel,
+) (docker.Container, error) {
 	c := docker.Container{
 		Name:                data.Name.ValueString(),
 		Image:               data.Image.ValueString(),
@@ -260,9 +263,7 @@ func (r *ContainerResource) readStatus(ctx context.Context, data *ContainerResou
 			if c.Status != "" {
 				data.Status = types.StringValue(c.Status)
 			}
-			if c.Image != "" {
-				// Keep planned image; list may return a digest form.
-			}
+			// Keep planned image even when list returns a digest form.
 			return
 		}
 	}

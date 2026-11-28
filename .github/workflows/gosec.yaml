@@ -23,6 +23,12 @@
     gosec:
        name: gosec
        runs-on: ubuntu-latest
+       # Push and schedule uploads need security-events: write. pull_request
+       # uploads are allowed without it, which is why those runs stayed green.
+       # actions: read is only required for private repositories.
+       permissions:
+         contents: read
+         security-events: write
        steps:
          - name: Checkout Source
            uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

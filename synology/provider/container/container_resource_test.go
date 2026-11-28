@@ -17,7 +17,9 @@ import (
 // shape tried, including the community Python client's). Manual cleanup of any
 // leftover `tfacc-*` containers is via the Container Manager UI.
 func TestAccContainerResource_basic(t *testing.T) {
-	t.Skip("DSM SYNO.Docker.Container delete returns 114 (error_invalid) for all known parameter shapes; create/list verified offline against the NAS")
+	t.Skip(
+		"DSM SYNO.Docker.Container delete returns 114 (error_invalid) for all known parameter shapes; create/list verified offline against the NAS",
+	)
 	name := "tfacc-ct-basic"
 	r.Test(t, r.TestCase{
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories(t),
